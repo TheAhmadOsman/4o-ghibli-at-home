@@ -18,8 +18,8 @@ This is not just a Ghibli-fier! The app has dozens of style profiles and advance
 - **Environment-based Configuration**: Easily manage settings like queue size, file storage, and device selection using a `.env` file.
 - **Persistent Storage & Cleanup**: Generated images are saved to disk, with an automatic background worker to clean up old job data and files to save space.
 - **Intelligent Logging**: Uses `Loguru` for clean, readable logs and automatically filters out noisy status checks to keep the console tidy.
-- **Simplified Architecture**: No external dependencies like Redis or Celery. Just Python and the required ML libraries.
-- **Asynchronous Task Queue**: Uses a simple, thread-safe, in-memory queue to handle image generation jobs one by one, preventing server overload.
+- **Robust FastAPI Backend**: The original Flask app has been migrated to a modern, high-performance FastAPI structure.
+- **Asynchronous Task Queue with Redis**: Uses `arq`, a powerful and simple async task queue, with Redis to manage image generation jobs, allowing for true background processing and scalability.
 - **GPU/CPU Agnostic**: Automatically uses an available NVIDIA GPU and gracefully falls back to the CPU (note: CPU is significantly slower).
 
 ## Quick Start
@@ -28,6 +28,8 @@ This is not just a Ghibli-fier! The app has dozens of style profiles and advance
 
 - **Python 3.11+**
   - `pip` or `uv` (Python package installer; `uv` is recommended for speed)
+- **Redis**: A running Redis instance is required for the task queue.
+  - You can run Redis locally using Docker: `docker run -d -p 6379:6379 redis:7`
 - **NVIDIA GPU** (recommended for speed; CPU fallback supported)
   - **~21GB VRAM** is preferred for the best performance.
 - Modern web browser (Chrome, Firefox, Edge, etc.)
@@ -68,20 +70,14 @@ source .venv/bin/activate
 
 ### 3. Install Dependencies
 
-Install the Python dependencies from `requirements.txt`.
-
-#### Option A: Using `uv`
+Install the Python dependencies from `pyproject.toml` (which now manages dependencies).
 
 ```bash
-# Install dependencies into your activated environment
-uv pip install -r requirements.txt
-```
+# Using uv (Recommended)
+uv pip install -e .
 
-#### Option B: Using `pip`
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+# Using pip
+pip install -e .
 ```
 
 ### 4. Configure Your Environment
@@ -95,40 +91,54 @@ The application is now configured using an environment file.
 # .env.example - Copy this to a new file named .env
 
 # --- Server Configuration ---
-# Maximum number of jobs to hold in the queue.
-MAX_QUEUE_SIZE=10
 # Maximum upload size in Megabytes (MB).
 MAX_UPLOAD_MB=25
 # Folder to store generated images. Will be created automatically.
 RESULTS_FOLDER="generated_images"
 
+# --- Redis & ARQ Task Queue ---
+REDIS_HOST="localhost"
+REDIS_PORT=6379
+REDIS_DB=0
+# Maximum number of concurrent jobs the ARQ worker will process.
+MAX_CONCURRENT_JOBS=2
+# How long a job can run before it times out (in seconds).
+JOB_TIMEOUT=600
+
 # --- Job & Resource Management ---
 # Device to run the model on ('cuda', 'cpu'). Defaults to 'cuda' if available.
 PYTORCH_DEVICE="cuda"
-# How long to keep job results in memory and on disk (in seconds). Default is 600 (10 minutes).
-JOB_RESULT_TTL=600
-# How often the cleanup worker runs (in seconds). Default is 300 (5 minutes).
-CLEANUP_INTERVAL=300
+# How long to keep job results in memory and on disk (in seconds). Default is 900 (15 minutes).
+JOB_RESULT_TTL=900
 ```
 
 ## How to Run
 
-The application runs with a single command, which starts the web server and the background processing worker. **I usually run local sessions with the development command.**
+The application now consists of two main components that must be run separately: the **FastAPI web server** and the **ARQ background worker**.
 
-- **For Development (Recommended & Tested):**
+- **For Development (Recommended):**
+
+    A helper script `run_dev.sh` is provided to start both processes concurrently.
 
     ```bash
-    python3.11 app.py
+    # Make the script executable (only needs to be done once)
+    chmod +x run_dev.sh
+
+    # Run the development server and worker
+    ./run_dev.sh
     ```
 
 - **For Production:**
 
-    Use a production-grade WSGI server like Gunicorn. **It is critical to use only ONE worker** because the job queue is in-memory and cannot be shared across multiple processes.
+    Use a production-grade ASGI server like Gunicorn to run the FastAPI app, and run the ARQ worker in a separate process (e.g., using `systemd` or a process manager).
 
     ```bash
-    # The `--workers 1` flag is essential for this application's design.
-    # Increase --threads for more concurrent I/O, and --timeout for long-running jobs.
-    gunicorn --workers 1 --threads 4 --timeout 600 -b 0.0.0.0:5000 app:app
+    # 1. Start the FastAPI application with Gunicorn
+    # The number of workers can be scaled based on your server's CPU cores.
+    gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:5000 app.main:app
+
+    # 2. In a separate terminal or process, start the ARQ worker
+    arq app.services.task_queue.WorkerSettings
     ```
 
 ## Open the App
@@ -142,25 +152,34 @@ You can now upload an image and start stylizing!
 ## API Endpoints
 
 - `POST /process-image` — Submits an image processing job. Returns a `job_id`.
-- `GET /status/<job_id>` — Checks the status of a job (`queued`, `processing`, `completed`, `failed`). Returns `queue_position` if queued.
-- `GET /result/<job_id>` — If the job is `completed`, returns the generated PNG image from the disk.
+- `GET /status/{job_id}` — Checks the status of a job (`queued`, `processing`, `completed`, `failed`). Returns `queue_position` if queued.
+- `GET /result/{job_id}` — If the job is `completed`, returns the generated PNG image from the disk.
+- `GET /api/profiles` — Retrieves the list of available style profiles.
 
 ## Project Structure
 
-- `app.py` — The all-in-one Flask server, API endpoints, and background image processing workers.
-- `static/*` — The complete, dynamic frontend application.
-- `requirements.txt` — All Python dependencies.
+- `main.py` — The main entry point for launching the application.
+- `app/` — The core FastAPI application directory.
+  - `main.py` — FastAPI app initialization, middleware, and error handlers.
+  - `core/` — Application configuration, logging, and lifespan events.
+  - `models/` — Pydantic models for data validation and serialization.
+  - `routers/` — API endpoint definitions (routes).
+  - `services/` — Business logic, including the ML model and task queue services.
+  - `utils/` — Helper functions.
+- `static/` — The complete, dynamic frontend application.
+- `pyproject.toml` — Project metadata and dependencies.
 - `generated_images/` — (Default directory) Where generated images are stored.
 - `.env` — (User-created from `.env_template`) File for all your local configuration.
 
 ## Deployment / Production Checklist
 
+- [ ] Ensure a Redis instance is running and accessible to the application.
 - [ ] Create and configure your `.env` file on the production server.
-- [ ] Update `CORS(app)` in `app.py` to a specific origin for your frontend domain if it's hosted separately.
-- [ ] **Crucially, run with a single worker process (e.g., `gunicorn --workers 1`)** due to the in-memory queue design.
+- [ ] Run the FastAPI app using a process manager like Gunicorn (see "How to Run").
+- [ ] Run the `arq` worker as a separate, long-running service (e.g., using `systemd`).
 - [ ] Use a reverse proxy like Nginx or Apache in front of the application for SSL/TLS, caching, and rate limiting.
-- [ ] Set up log rotation for the output from your WSGI server.
-- [ ] Set up monitoring to watch server health and resource usage (CPU, GPU, RAM).
+- [ ] Set up log rotation for the output from your ASGI server and ARQ worker.
+- [ ] Set up monitoring to watch server health and resource usage (CPU, GPU, RAM, Redis).
 - [ ] (Optional) Add an authentication layer for private deployments.
 
 ## License
