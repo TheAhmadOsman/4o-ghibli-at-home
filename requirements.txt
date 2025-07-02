@@ -1,0 +1,8 @@
+dfloat11==0.2.0
+diffusers==0.34.0
+flask==3.1.1
+flask-cors==6.0.1
+loguru==0.7.3
+pillow==11.3.0
+python-dotenv==1.1.1
+torch==2.7.1
