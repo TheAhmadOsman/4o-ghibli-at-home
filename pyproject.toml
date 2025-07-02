@@ -5,12 +5,19 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "flask",
-    "flask-cors",
-    "python-dotenv",
-    "loguru",
-    "torch",
-    "Pillow",
-    "diffusers",
-    "dfloat11",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.22.0",
+    "pydantic-settings>=2.2.1",
+    "loguru>=0.7.2",
+    "python-dotenv>=1.0.1",
+    # --- ML & Image ---
+    "torch>=2.2.1",
+    "diffusers>=0.27.2",
+    "Pillow>=10.2.0",
+    "dfloat11>=0.1.1",
+    # --- Task Queue ---
+    "arq>=0.25.0",
+    "redis>=5.0.1",
+    # --- File I/O ---
+    "aiofiles>=23.2.1",
 ]
