@@ -1,0 +1,68 @@
+# Use the official PyTorch runtime image. It contains Python, CUDA, and cuDNN.
+# We use a single stage to avoid complex and error-prone COPY commands.
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+
+# Add a build argument to allow for cache busting.
+# Changing this argument's value will invalidate the cache for this and subsequent layers.
+ARG CACHE_BUSTER=none
+
+# Set environment variables to prevent interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+# Set environment variable for Hugging Face to avoid saving models to the root home directory
+ENV HF_HOME=/app/huggingface
+# Prevent transformers from showing a telemetry warning
+ENV HF_HUB_DISABLE_TELEMETRY=1
+# Add uv's binary directory to the system's PATH.
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Set the working directory for all subsequent commands
+WORKDIR /app
+
+# --- System Dependencies & uv Installation ---
+# Install git, curl (for uv), SSH, rsync, redis-server, and then uv itself in a single RUN command.
+RUN echo "Cache Buster Value: ${CACHE_BUSTER}" && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    openssh-server \
+    rsync \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# --- Application Setup ---
+# The git clone approach is kept here to match your original workflow.
+# Will need to change this to the main project when changes merged. 
+RUN git clone https://github.com/dranoto/4o-ghibli-at-home.git .
+
+# --- Python Environment Setup ---
+# Create a virtual environment using uv. This isolates our Python packages.
+RUN /root/.local/bin/uv venv
+# Add the virtual environment's bin directory to the PATH.
+# This ensures that commands like `gunicorn` are found at runtime.
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# Install Python dependencies into the virtual environment using uv.
+#
+# --- FIX ---
+# Based on the error log, the correct command is `uv pip install . --group prod`.
+# The `--group prod` flag explicitly tells uv to install the 'prod' group
+# from the `[dependency-groups]` section in pyproject.toml.
+RUN /root/.local/bin/uv pip install . --group prod
+
+# Copy the start.sh script from the local build context (your machine) into the container.
+COPY start.sh .
+# Make the script executable.
+RUN chmod +x start.sh
+
+# --- Expose Ports ---
+# Expose ports for the Flask/Gunicorn app, SSH, and Redis.
+EXPOSE 5000
+EXPOSE 22
+EXPOSE 6379
+
+# Set the entrypoint to our start script.
+# We can call it directly because the virtual environment's bin directory
+# was already added to the system's PATH via the ENV instruction above.
+ENTRYPOINT ["./start.sh"]

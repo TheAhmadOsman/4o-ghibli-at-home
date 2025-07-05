@@ -666,3 +666,149 @@ without removing or changing the original desktop-first design.
         text-align: center;
     }
 }
+
+/*
+=====================================
+--- NEW: JOB QUEUE STYLES ---
+=====================================
+*/
+
+#job-queue-container {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid var(--secondary-color-dark);
+}
+
+#job-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.job-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background: var(--secondary-color);
+    border: 1px solid var(--secondary-color-dark);
+    border-radius: var(--radius);
+    transition: background-color 0.2s;
+}
+
+.job-item.failed {
+    background-color: #fff0f0;
+    border-color: #f5c6cb;
+}
+
+.job-preview {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+    background-color: var(--secondary-color-dark);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.job-preview.clickable {
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.job-preview.clickable:hover {
+    transform: scale(1.05);
+}
+
+.job-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.job-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--tertiary-color);
+    border-radius: 50%;
+    animation: job-item-spin 1s linear infinite;
+    display: none;
+}
+
+@keyframes job-item-spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+.job-details {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.9em;
+}
+
+.job-details p {
+    margin: 0;
+}
+
+.job-details .job-id span {
+    font-family: monospace;
+    color: var(--primary-color);
+    opacity: 0.8;
+}
+
+.job-details .job-status span {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.job-item.failed .job-details .job-status span {
+    color: #721c24;
+}
+
+.btn-download-job {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    margin-top: 5px;
+    background: var(--secondary-color);
+    color: var(--primary-color);
+    border: 2px solid var(--secondary-color-dark);
+}
+
+.btn-download-job:hover {
+    border-color: var(--tertiary-color);
+}
+
+/*
+=====================================
+--- NEW: CELERY LOG STYLES ---
+=====================================
+*/
+
+#celery-log-container {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid var(--secondary-color-dark);
+}
+
+#celery-log-content {
+    background-color: var(--code-bg);
+    color: var(--code-fg);
+    padding: 15px;
+    border-radius: var(--radius);
+    height: 200px;
+    overflow-y: scroll;
+    font-family: monospace;
+    font-size: 0.85em;
+    white-space: pre-wrap; /* Wrap long lines */
+    word-wrap: break-word;
+}

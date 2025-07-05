@@ -26,6 +26,8 @@ classifiers = [
 ]
 
 dependencies = [
+    "celery",
+    "redis",
     "dfloat11[cuda12]>=0.2.0",
     "diffusers",
     "flask>=3.1.1",
